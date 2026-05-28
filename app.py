@@ -112,27 +112,27 @@ else:
 
         with tab1:
             st.subheader("Annotated Shelf Composite Layout")
-            ann_path = res.get("annotated_image", "")
+            ann_path = res.get("annotated_image") or ""
             if ann_path and os.path.exists(ann_path):
                 st.image(ann_path, width="stretch", caption=f"Pipeline output — {selected_file_name}")
 
         with tab2:
             st.subheader("Business Metrics & Planogram Integrity")
             c1, c2, c3, c4 = st.columns(4)
-            c1.markdown(f'<div class="metric-container"><div class="metric-value">{res.get("total_products", 0)}</div><div class="metric-label">Total Products</div></div>', unsafe_allow_html=True)
-            c2.markdown(f'<div class="metric-container"><div class="metric-value">{len(res.get("brands", {}))}</div><div class="metric-label">Unique Brands</div></div>', unsafe_allow_html=True)
+            c1.markdown(f'<div class="metric-container"><div class="metric-value">{res.get("total_products") or 0}</div><div class="metric-label">Total Products</div></div>', unsafe_allow_html=True)
+            c2.markdown(f'<div class="metric-container"><div class="metric-value">{len(res.get("brands") or {})}</div><div class="metric-label">Unique Brands</div></div>', unsafe_allow_html=True)
             
-            osa_status = res.get("on_shelf_availability", "UNKNOWN")
+            osa_status = res.get("on_shelf_availability") or "UNKNOWN"
             osa_c = "#10B981" if osa_status == "IN_STOCK" else "#EF4444"
             c3.markdown(f'<div class="metric-container"><div class="metric-value" style="color:{osa_c}">{osa_status}</div><div class="metric-label">OSA Status</div></div>', unsafe_allow_html=True)
             
-            plano = res.get("planogram", {"score": 0.0, "observation": "N/A"})
-            sc = plano.get("score", 0.0)
+            plano = res.get("planogram") or {"score": 0.0, "observation": "N/A"}
+            sc = plano.get("score") or 0.0
             sc_c = "#10B981" if sc >= 0.7 else "#F59E0B" if sc >= 0.5 else "#EF4444"
             c4.markdown(f'<div class="metric-container"><div class="metric-value" style="color:{sc_c}">{sc:.2f}</div><div class="metric-label">Planogram Health</div></div>', unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.info(f"📋 **Planogram Observation:** {plano.get('observation', 'N/A')}")
+            st.info(f"📋 **Planogram Observation:** {plano.get('observation') or 'N/A'}")
             
             col_a, col_b, col_c = st.columns(3)
             with col_a:
@@ -164,8 +164,9 @@ else:
             st.subheader("Export Audit Reports")
             d1, d2 = st.columns(2)
             with d1:
-                if os.path.exists(res.get("annotated_image", "")):
-                    with open(res["annotated_image"], "rb") as fh:
+                ann_path = res.get("annotated_image") or ""
+                if ann_path and os.path.exists(ann_path):
+                    with open(ann_path, "rb") as fh:
                         st.download_button(label="⬇️  Download Annotated Image", data=fh.read(), file_name=f"annotated_{selected_file_name}", mime="image/jpeg", width="stretch", key="dl_annotated_tab")
             with d2:
                 st.download_button(label="⬇️  Download Metrics JSON", data=json.dumps(clean, indent=4), file_name=f"metrics_{os.path.splitext(selected_file_name)[0]}.json", mime="application/json", width="stretch", key="dl_metrics_tab")
