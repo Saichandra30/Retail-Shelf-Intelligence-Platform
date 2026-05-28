@@ -48,7 +48,7 @@ python pipeline.py --images_dir "images/"
 ```mermaid
 graph TD
     A[Input Image] --> B[Product Detector]
-    B -->|YOLOv8n (SKU-110K)| C[Bounding Boxes]
+    B -->|YOLOv8n SKU-110K| C[Bounding Boxes]
     
     C --> D[Shelf Segmentor]
     D -->|Spatial Heuristics| E[Orientation & Layout]
