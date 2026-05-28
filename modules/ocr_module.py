@@ -75,7 +75,7 @@ class ShelfOCR:
 
                 if num_val not in seen_nums:
                     seen_nums.add(num_val)
-                    rail_labels.append(f"\u20b9{num_val}")  # ₹ symbol in JSON
+                    rail_labels.append(str(num_val))  # Raw number without symbol
 
         # Sort numerically
         rail_labels.sort(key=lambda s: int(re.sub(r'\D', '', s)) if re.sub(r'\D', '', s) else 0)

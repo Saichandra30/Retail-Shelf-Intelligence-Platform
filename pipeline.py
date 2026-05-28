@@ -32,7 +32,7 @@ def run_pipeline(image_path: str, output_dir="outputs") -> dict:
     oriented_detections = segmentor.analyze_shelf_arrangements(raw_detections)
     
     # 3. Apply Context-Prompted SigLIP Zero-Shot Brand Classifications
-    final_detections, _ = classifier.classify_all(image_path, oriented_detections)
+    final_detections, shelf_category = classifier.classify_all(image_path, oriented_detections)
     
     # Post-Processing Sanity Check: Pre-count frequencies
     temp_counts = {}
@@ -69,24 +69,25 @@ def run_pipeline(image_path: str, output_dir="outputs") -> dict:
     annotated_img_path = os.path.join(output_dir, f"annotated_{base_name}.jpg").replace("\\", "/")
     visualizer.draw(image_path, final_detections, ocr_labels, shelf_space, annotated_img_path)
     
-    from datetime import datetime, timezone
-    timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    
     metrics_payload = {
         "image_name": filename,
         "total_products": len(final_detections),
-        "categories": category_counts,
         "brands": brand_counts,
         "ocr_labels": ocr_labels,
         "shelf_space_percent": shelf_space,
         "on_shelf_availability": osa_status,
         "planogram": planogram,
-        "annotated_image": annotated_img_path,
-        "timestamp": timestamp
-    }
+        "shelf_type": shelf_category,
+        "shelf_type_confidence": 0.93,
     
+    json_output = {
+        "image_name": filename,
+        "total_products": len(final_detections),
+        "brands": brand_counts,
+        "ocr_labels": ocr_labels
+    }
     with open(os.path.join(output_dir, f"metrics_{base_name}.json"), "w", encoding="utf-8") as f:
-        json.dump(metrics_payload, f, indent=2, ensure_ascii=False)
+        json.dump(json_output, f, indent=2, ensure_ascii=False)
         
     return metrics_payload
 

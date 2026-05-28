@@ -138,6 +138,57 @@ DAIRY_KW_LOW     = {"milk", "butter", "yogurt", "cheese", "dahi"}
 BEVERAGE_KW_LOW  = {"juice", "drink", "soda"}
 
 
+def _ocr_shelf_category(img: np.ndarray, detections: List[Dict]) -> str:
+    """
+    Use EasyOCR on shelf rail strips to detect brand name keywords.
+    Returns the shelf category with the highest weighted keyword score.
+    Returns None if OCR yields no signal.
+    """
+    try:
+        import easyocr
+        reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+    except Exception:
+        return None
+
+    h, w, _ = img.shape
+    y_bottoms = sorted([d["bbox"][3] for d in detections])
+    unique_rails = []
+    for y in y_bottoms:
+        if not any(abs(y - ry) < 40 for ry in unique_rails):
+            unique_rails.append(y)
+
+    blob = ""
+    for y_rail in unique_rails:
+        y1 = max(0, int(y_rail))
+        y2 = min(h, int(y_rail) + 60)
+        if y2 <= y1:
+            continue
+        roi = img[y1:y2, 0:w]
+        if roi.size == 0:
+            continue
+        roi_up = cv2.resize(roi, (roi.shape[1] * 2, roi.shape[0] * 2), interpolation=cv2.INTER_CUBIC)
+        try:
+            for _, text, prob in reader.readtext(roi_up):
+                if prob >= 0.4:
+                    blob += " " + text.lower()
+        except Exception:
+            pass
+
+    def _score(high_kws, low_kws):
+        return (sum(3 for kw in high_kws if kw in blob) +
+                sum(1 for kw in low_kws  if kw in blob))
+
+    scores = {
+        "snacks":    _score(SNACK_KW_HIGH,    SNACK_KW_LOW),
+        "beverages": _score(BEVERAGE_KW_HIGH, BEVERAGE_KW_LOW),
+        "dairy":     _score(DAIRY_KW_HIGH,    DAIRY_KW_LOW),
+    }
+    best_score = max(scores.values())
+    if best_score >= 1:
+        return max(scores, key=scores.get)
+    return None
+
+
 class BrandClassifier:
     def __init__(self):
         self.processor = AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
@@ -149,6 +200,7 @@ class BrandClassifier:
         img = cv2.imread(image_path)
         if img is None or not detections:
             return []
+
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(img_rgb)
 
@@ -162,9 +214,25 @@ class BrandClassifier:
 
         # ---------------------------------------------------------------
         # STAGE 1: SHELF CATEGORY DETECTION
-        # Skipped OCR due to extreme slowness. Will use SigLIP majority vote.
+        # Primary:  OCR brand-keyword scoring on shelf rail strips.
+        # Fallback: SigLIP global majority vote across all crops.
         # ---------------------------------------------------------------
-        shelf_category = None
+        shelf_category = _ocr_shelf_category(img, detections)
+
+        if shelf_category is None:
+            # Fallback: SigLIP on the full shelf image
+            full_shelf_prompts = [
+                "a photo of a snack shelf in a supermarket",
+                "a photo of a beverage shelf in a supermarket",
+                "a photo of a dairy shelf in a supermarket"
+            ]
+            inputs = self.processor(
+                images=pil_img, text=full_shelf_prompts,
+                padding=True, return_tensors="pt"
+            )
+            with torch.no_grad():
+                probs = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()[0]
+            shelf_category = CATEGORY_NAMES[int(np.argmax(probs))]
 
         # ---------------------------------------------------------------
         # STAGE 1b: PER-PRODUCT CATEGORY LABEL (for JSON breakdown only)
@@ -184,53 +252,46 @@ class BrandClassifier:
                 det["category_confidence"] = round(float(probs[best]), 2)
 
         # ---------------------------------------------------------------
-        # STAGE 2: CATEGORY-AWARE BRAND CLASSIFICATION (MIXED SHELVES)
-        # Group crops by their predicted category to handle mixed shelves.
-        # This allows an image to have both beverages and dairy without
-        # one category hijacking the whitelist of the other.
+        # STAGE 2: CATEGORY-AWARE BRAND CLASSIFICATION
+        # ALL crops are classified against shelf_category's whitelist.
+        # This prevents noisy low-res SigLIP category predictions
+        # from causing brand hallucinations (e.g., routing a blurry
+        # cheese packet into the snack whitelist).
         # ---------------------------------------------------------------
-        crops_by_cat = {cat: [] for cat in CATEGORY_NAMES}
-        for j, crop in enumerate(all_pil_crops):
-            cat = detections[j]["category"]
-            crops_by_cat[cat].append((j, crop))
+        # Fallback to the most common per-crop category if OCR failed
+        if shelf_category is None:
+            shelf_category = max(set(d["category"] for d in detections), key=lambda c: sum(1 for d in detections if d["category"] == c))
 
-        for cat, items in crops_by_cat.items():
-            if not items:
-                continue
+        target_dict = CATEGORY_DICTS[shelf_category]
+        target_labels = list(target_dict.keys()) + ["generic unbranded item", "blank background"]
+        queries = [
+            f"a photo of a {p} on a retail store shelf" if p in target_dict else p
+            for p in target_labels
+        ]
 
-            target_dict = CATEGORY_DICTS[cat]
-            target_labels = list(target_dict.keys()) + ["generic unbranded item", "blank background"]
-            queries = [
-                f"a photo of a {p} on a retail store shelf" if p in target_dict else p
-                for p in target_labels
-            ]
+        for i in range(0, len(all_pil_crops), BATCH_SIZE):
+            batch_idx = list(range(i, min(i + BATCH_SIZE, len(all_pil_crops))))
+            batch_crops = [all_pil_crops[k] for k in batch_idx]
 
-            # Batch process items for this specific category
-            for i in range(0, len(items), BATCH_SIZE):
-                batch_items = items[i:i + BATCH_SIZE]
-                batch_crops = [item[1] for item in batch_items]
-                batch_indices = [item[0] for item in batch_items]
+            inputs = self.processor(
+                images=batch_crops, text=queries,
+                padding=True, return_tensors="pt"
+            )
+            with torch.no_grad():
+                probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
 
-                inputs = self.processor(
-                    images=batch_crops, text=queries,
-                    padding=True, return_tensors="pt"
-                )
-                with torch.no_grad():
-                    probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
+            for j, probs in enumerate(probs_b):
+                det = detections[batch_idx[j]]
+                max_idx = int(np.argmax(probs))
+                assigned_label = target_labels[max_idx]
+                conf = round(float(probs[max_idx]), 2)
 
-                for j, probs in enumerate(probs_b):
-                    det = detections[batch_indices[j]]
-                    max_idx = int(np.argmax(probs))
-                    assigned_label = target_labels[max_idx]
-                    conf = round(float(probs[max_idx]), 2)
+                # Confidence guardrail: < 0.35 → "Other"
+                if conf < 0.35 or assigned_label not in target_dict:
+                    det["brand"] = "Other"
+                    det["brand_confidence"] = conf
+                else:
+                    det["brand"] = target_dict[assigned_label]
+                    det["brand_confidence"] = conf
 
-                    # Confidence guardrail: < 0.35 → "Other"
-                    if conf < 0.35 or assigned_label not in target_dict:
-                        det["brand"] = "Other"
-                        det["brand_confidence"] = conf
-                    else:
-                        det["brand"] = target_dict[assigned_label]
-                        det["brand_confidence"] = conf
-
-        # Return "mixed" since we now dynamically handle multiple categories
-        return detections, "mixed"
+        return detections, shelf_category
