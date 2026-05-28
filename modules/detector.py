@@ -1,7 +1,15 @@
 import os
 import cv2
+import torch
 from ultralytics import YOLO
 from typing import List, Dict, Any
+
+# Bypass PyTorch 2.6 strict weights_only default which breaks Ultralytics YOLO pickle loading
+_original_load = torch.load
+def _patched_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_load(*args, **kwargs)
+torch.load = _patched_load
 
 class ProductDetector:
     def __init__(self):

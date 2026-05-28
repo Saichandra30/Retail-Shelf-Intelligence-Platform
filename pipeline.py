@@ -1,4 +1,6 @@
 import os
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
 import json
 import argparse
 from glob import glob
