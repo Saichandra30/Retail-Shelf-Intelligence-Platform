@@ -231,7 +231,7 @@ class BrandClassifier:
                 padding=True, return_tensors="pt"
             )
             with torch.no_grad():
-                probs = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()[0]
+                probs = self.model(**inputs).logits_per_image.sigmoid().cpu().numpy()[0]
             shelf_category = CATEGORY_NAMES[int(np.argmax(probs))]
 
         # ---------------------------------------------------------------
@@ -244,7 +244,7 @@ class BrandClassifier:
                 padding=True, return_tensors="pt"
             )
             with torch.no_grad():
-                probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
+                probs_b = self.model(**inputs).logits_per_image.sigmoid().cpu().numpy()
             for j, probs in enumerate(probs_b):
                 det = detections[i + j]
                 best = int(np.argmax(probs))
@@ -278,26 +278,20 @@ class BrandClassifier:
                 padding=True, return_tensors="pt"
             )
             with torch.no_grad():
-                probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
+                probs_b = self.model(**inputs).logits_per_image.sigmoid().cpu().numpy()
 
             for j, probs in enumerate(probs_b):
                 det = detections[batch_idx[j]]
-                
-                # Aggregate probabilities by brand to avoid softmax dilution across flavors
-                brand_probs = {}
-                for idx, p in enumerate(probs):
-                    label = target_labels[idx]
-                    brand = target_dict.get(label, "Other")
-                    brand_probs[brand] = brand_probs.get(brand, 0.0) + float(p)
-                
-                best_brand = max(brand_probs, key=brand_probs.get)
-                best_conf = brand_probs[best_brand]
+                max_idx = int(np.argmax(probs))
+                assigned_label = target_labels[max_idx]
+                conf = round(float(probs[max_idx]), 2)
 
-                if best_conf < 0.35:
+                # Confidence guardrail: < 0.15 → "Other"
+                if conf < 0.15 or assigned_label not in target_dict:
                     det["brand"] = "Other"
-                    det["brand_confidence"] = round(best_conf, 2)
+                    det["brand_confidence"] = conf
                 else:
-                    det["brand"] = best_brand
-                    det["brand_confidence"] = round(best_conf, 2)
+                    det["brand"] = target_dict[assigned_label]
+                    det["brand_confidence"] = conf
 
         return detections, shelf_category
