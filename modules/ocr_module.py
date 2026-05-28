@@ -32,8 +32,9 @@ class ShelfOCR:
 
         for y_rail in unique_rails:
             # Crop strictly the shelf rail strip (just below the product bounding boxes)
-            y1 = max(0, int(y_rail) + 5)
-            y2 = min(h, int(y_rail) + 45)
+            # Expanded to 120px to account for high-resolution images where rails are thick
+            y1 = max(0, int(y_rail) - 10)
+            y2 = min(h, int(y_rail) + 120)
 
             if y2 <= y1 or (y2 - y1) < 5:
                 continue
@@ -56,11 +57,11 @@ class ShelfOCR:
                 if prob < 0.45:
                     continue
 
-                # Filter: Must either contain ₹/Rs or just be a clean 1-3 digit price
+                # Filter: Must either contain ₹/Rs/* or just be a clean 1-3 digit price
                 text_clean = text.strip()
-                if not re.search(r'(?:₹|rs\.|rs\s)', text_clean, re.IGNORECASE):
-                    # If it's just a raw number from packaging (like 845), skip it
-                    if len(re.sub(r'\D', '', text_clean)) >= 3:
+                if not re.search(r'(?:₹|rs\.|rs\s|\*|price)', text_clean, re.IGNORECASE):
+                    # If it's a long barcode/packaging number, skip it
+                    if len(re.sub(r'\D', '', text_clean)) >= 4:
                         continue
 
                 # Extract only digit sequences (price numbers)

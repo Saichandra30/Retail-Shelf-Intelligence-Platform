@@ -159,8 +159,8 @@ def _ocr_shelf_category(img: np.ndarray, detections: List[Dict]) -> str:
 
     blob = ""
     for y_rail in unique_rails:
-        y1 = max(0, int(y_rail))
-        y2 = min(h, int(y_rail) + 60)
+        y1 = max(0, int(y_rail) - 10)
+        y2 = min(h, int(y_rail) + 120)
         if y2 <= y1:
             continue
         roi = img[y1:y2, 0:w]
