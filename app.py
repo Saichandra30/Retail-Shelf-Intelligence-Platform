@@ -1,4 +1,8 @@
 import os
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import json
 import streamlit as st
 import pandas as pd
@@ -32,14 +36,9 @@ st.sidebar.markdown("### Actions")
 run_btn = st.sidebar.button("▶  Run Inference Pipeline", type="primary", width="stretch")  # noqa: keep for sidebar compat
 
 with st.sidebar.expander("⚙️ Model Metadata", expanded=False):
-    try:
-        detector, ocr, classifier, segmentor, visualizer = get_pipeline_components()
-        meta = detector.get_model_info()
-        meta["ocr_engine"] = "EasyOCR (CRAFT + CRNN, CPU Mode)"
-        meta["classifier_model"] = "Hierarchical Zero-Shot (SigLIP, CPU Mode)"
-        st.json(meta)
-    except Exception as e:
-        st.sidebar.warning(f"Initializing weights: {e}")
+    st.markdown("- **Detection:** YOLOv8n (SKU-110K weights)")
+    st.markdown("- **OCR:** EasyOCR (CRAFT + CRNN, CPU Mode)")
+    st.markdown("- **Classification:** Hierarchical Zero-Shot (SigLIP, CPU Mode)")
 
 st.title("🛍️ Retail Shelf Intelligence Platform")
 st.markdown("Automated **on-shelf availability**, **share of shelf**, and **planogram auditing** powered by YOLOv8 + Hybrid OCR-SigLIP + EasyOCR.")
