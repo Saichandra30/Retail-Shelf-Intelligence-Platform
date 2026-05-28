@@ -184,46 +184,53 @@ class BrandClassifier:
                 det["category_confidence"] = round(float(probs[best]), 2)
 
         # ---------------------------------------------------------------
-        # STAGE 2: CATEGORY-AWARE BRAND CLASSIFICATION
-        # ALL crops are classified against shelf_category's whitelist.
-        # This prevents noisy low-res SigLIP category predictions
-        # from causing brand hallucinations (e.g., routing a blurry
-        # cheese packet into the snack whitelist).
+        # STAGE 2: CATEGORY-AWARE BRAND CLASSIFICATION (MIXED SHELVES)
+        # Group crops by their predicted category to handle mixed shelves.
+        # This allows an image to have both beverages and dairy without
+        # one category hijacking the whitelist of the other.
         # ---------------------------------------------------------------
-        # Fallback to the most common per-crop category if OCR failed
-        if shelf_category is None:
-            shelf_category = max(set(d["category"] for d in detections), key=lambda c: sum(1 for d in detections if d["category"] == c))
+        crops_by_cat = {cat: [] for cat in CATEGORY_NAMES}
+        for j, crop in enumerate(all_pil_crops):
+            cat = detections[j]["category"]
+            crops_by_cat[cat].append((j, crop))
 
-        target_dict = CATEGORY_DICTS[shelf_category]
-        target_labels = list(target_dict.keys()) + ["generic unbranded item", "blank background"]
-        queries = [
-            f"a photo of a {p} on a retail store shelf" if p in target_dict else p
-            for p in target_labels
-        ]
+        for cat, items in crops_by_cat.items():
+            if not items:
+                continue
 
-        for i in range(0, len(all_pil_crops), BATCH_SIZE):
-            batch_idx = list(range(i, min(i + BATCH_SIZE, len(all_pil_crops))))
-            batch_crops = [all_pil_crops[k] for k in batch_idx]
+            target_dict = CATEGORY_DICTS[cat]
+            target_labels = list(target_dict.keys()) + ["generic unbranded item", "blank background"]
+            queries = [
+                f"a photo of a {p} on a retail store shelf" if p in target_dict else p
+                for p in target_labels
+            ]
 
-            inputs = self.processor(
-                images=batch_crops, text=queries,
-                padding=True, return_tensors="pt"
-            )
-            with torch.no_grad():
-                probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
+            # Batch process items for this specific category
+            for i in range(0, len(items), BATCH_SIZE):
+                batch_items = items[i:i + BATCH_SIZE]
+                batch_crops = [item[1] for item in batch_items]
+                batch_indices = [item[0] for item in batch_items]
 
-            for j, probs in enumerate(probs_b):
-                det = detections[batch_idx[j]]
-                max_idx = int(np.argmax(probs))
-                assigned_label = target_labels[max_idx]
-                conf = round(float(probs[max_idx]), 2)
+                inputs = self.processor(
+                    images=batch_crops, text=queries,
+                    padding=True, return_tensors="pt"
+                )
+                with torch.no_grad():
+                    probs_b = self.model(**inputs).logits_per_image.softmax(dim=-1).cpu().numpy()
 
-                # Confidence guardrail: < 0.35 → "Other"
-                if conf < 0.35 or assigned_label not in target_dict:
-                    det["brand"] = "Other"
-                    det["brand_confidence"] = conf
-                else:
-                    det["brand"] = target_dict[assigned_label]
-                    det["brand_confidence"] = conf
+                for j, probs in enumerate(probs_b):
+                    det = detections[batch_indices[j]]
+                    max_idx = int(np.argmax(probs))
+                    assigned_label = target_labels[max_idx]
+                    conf = round(float(probs[max_idx]), 2)
 
-        return detections, shelf_category
+                    # Confidence guardrail: < 0.35 → "Other"
+                    if conf < 0.35 or assigned_label not in target_dict:
+                        det["brand"] = "Other"
+                        det["brand_confidence"] = conf
+                    else:
+                        det["brand"] = target_dict[assigned_label]
+                        det["brand_confidence"] = conf
+
+        # Return "mixed" since we now dynamically handle multiple categories
+        return detections, "mixed"
