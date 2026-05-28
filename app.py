@@ -76,8 +76,12 @@ else:
                 try:
                     # Force run fresh, live code compilation pass
                     result = run_pipeline(img_path, "outputs")
-                    
-                    # Normalize key back so your UI selects it seamlessly
+                    clean = {
+                        "image_name": result.get("image_name", ""),
+                        "total_products": result.get("total_products", 0),
+                        "brands": result.get("brands", {}),
+                        "ocr_labels": result.get("ocr_labels", [])
+                    }
                     st.session_state["results"][file.name] = result
                     st.success(f"✅ {file.name} processed successfully.")
                 except Exception as e:
@@ -91,12 +95,8 @@ else:
         clean = {
             "image_name": res.get("image_name", ""),
             "total_products": res.get("total_products", 0),
-            "categories": res.get("categories", {}),
             "brands": res.get("brands", {}),
-            "ocr_labels": res.get("ocr_labels", []),
-            "shelf_space_percent": res.get("shelf_space_percent", {}),
-            "planogram": res.get("planogram", {}),
-            "annotated_image": res.get("annotated_image", "")
+            "ocr_labels": res.get("ocr_labels", [])
         }
         
         st.download_button(
