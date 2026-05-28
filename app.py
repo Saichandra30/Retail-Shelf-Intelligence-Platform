@@ -33,7 +33,7 @@ if uploaded_files:
     selected_file_name = st.sidebar.selectbox("Select image to inspect", file_names)
 
 st.sidebar.markdown("### Actions")
-run_btn = st.sidebar.button("▶  Run Inference Pipeline", type="primary", width="stretch")  # noqa: keep for sidebar compat
+run_btn = st.sidebar.button("▶  Run Inference Pipeline", type="primary", use_container_width=True)  # noqa: keep for sidebar compat
 
 with st.sidebar.expander("⚙️ Model Metadata", expanded=False):
     st.markdown("- **Detection:** YOLOv8n (SKU-110K weights)")
@@ -103,7 +103,7 @@ else:
             data=json.dumps(clean, indent=4),
             file_name=f"metrics_{os.path.splitext(selected_file_name)[0]}.json",
             mime="application/json",
-            width="stretch",
+            use_container_width=True,
             key="dl_metrics_top"
         )
         
@@ -166,6 +166,6 @@ else:
                 ann_path = res.get("annotated_image") or ""
                 if ann_path and os.path.exists(ann_path):
                     with open(ann_path, "rb") as fh:
-                        st.download_button(label="⬇️  Download Annotated Image", data=fh.read(), file_name=f"annotated_{selected_file_name}", mime="image/jpeg", width="stretch", key="dl_annotated_tab")
+                        st.download_button(label="⬇️  Download Annotated Image", data=fh.read(), file_name=f"annotated_{selected_file_name}", mime="image/jpeg", use_container_width=True, key="dl_annotated_tab")
             with d2:
-                st.download_button(label="⬇️  Download Metrics JSON", data=json.dumps(clean, indent=4), file_name=f"metrics_{os.path.splitext(selected_file_name)[0]}.json", mime="application/json", width="stretch", key="dl_metrics_tab")
+                st.download_button(label="⬇️  Download Metrics JSON", data=json.dumps(clean, indent=4), file_name=f"metrics_{os.path.splitext(selected_file_name)[0]}.json", mime="application/json", use_container_width=True, key="dl_metrics_tab")
