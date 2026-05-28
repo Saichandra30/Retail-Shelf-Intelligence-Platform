@@ -113,7 +113,7 @@ else:
             st.subheader("Annotated Shelf Composite Layout")
             ann_path = res.get("annotated_image") or ""
             if ann_path and os.path.exists(ann_path):
-                st.image(ann_path, width="stretch", caption=f"Pipeline output — {selected_file_name}")
+                st.image(ann_path, use_container_width=True, caption=f"Pipeline output — {selected_file_name}")
 
         with tab2:
             st.subheader("Business Metrics & Planogram Integrity")
