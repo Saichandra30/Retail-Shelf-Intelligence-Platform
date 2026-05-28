@@ -79,6 +79,8 @@ def run_pipeline(image_path: str, output_dir="outputs") -> dict:
         "planogram": planogram,
         "shelf_type": shelf_category,
         "shelf_type_confidence": 0.93,
+        "annotated_image": annotated_img_path
+    }
     
     json_output = {
         "image_name": filename,
