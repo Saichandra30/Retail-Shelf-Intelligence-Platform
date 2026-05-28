@@ -119,16 +119,20 @@ else:
         with tab2:
             st.subheader("Business Metrics & Planogram Integrity")
             c1, c2, c3, c4 = st.columns(4)
-            c1.markdown(f'<div class="metric-container"><div class="metric-value">{res["total_products"]}</div><div class="metric-label">Total Products</div></div>', unsafe_allow_html=True)
-            c2.markdown(f'<div class="metric-container"><div class="metric-value">{len(res["brands"])}</div><div class="metric-label">Unique Brands</div></div>', unsafe_allow_html=True)
-            osa_c = "#10B981" if res["on_shelf_availability"] == "IN_STOCK" else "#EF4444"
-            c3.markdown(f'<div class="metric-container"><div class="metric-value" style="color:{osa_c}">{res["on_shelf_availability"]}</div><div class="metric-label">OSA Status</div></div>', unsafe_allow_html=True)
-            sc = res["planogram"]["score"]
+            c1.markdown(f'<div class="metric-container"><div class="metric-value">{res.get("total_products", 0)}</div><div class="metric-label">Total Products</div></div>', unsafe_allow_html=True)
+            c2.markdown(f'<div class="metric-container"><div class="metric-value">{len(res.get("brands", {}))}</div><div class="metric-label">Unique Brands</div></div>', unsafe_allow_html=True)
+            
+            osa_status = res.get("on_shelf_availability", "UNKNOWN")
+            osa_c = "#10B981" if osa_status == "IN_STOCK" else "#EF4444"
+            c3.markdown(f'<div class="metric-container"><div class="metric-value" style="color:{osa_c}">{osa_status}</div><div class="metric-label">OSA Status</div></div>', unsafe_allow_html=True)
+            
+            plano = res.get("planogram", {"score": 0.0, "observation": "N/A"})
+            sc = plano.get("score", 0.0)
             sc_c = "#10B981" if sc >= 0.7 else "#F59E0B" if sc >= 0.5 else "#EF4444"
             c4.markdown(f'<div class="metric-container"><div class="metric-value" style="color:{sc_c}">{sc:.2f}</div><div class="metric-label">Planogram Health</div></div>', unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.info(f"📋 **Planogram Observation:** {res['planogram']['observation']}")
+            st.info(f"📋 **Planogram Observation:** {plano.get('observation', 'N/A')}")
             
             col_a, col_b, col_c = st.columns(3)
             with col_a:
@@ -137,11 +141,11 @@ else:
                     st.bar_chart(pd.DataFrame(list(res["categories"].items()), columns=["Category", "Count"]).set_index("Category"))
             with col_b:
                 st.markdown("#### Brand Distribution")
-                if res["brands"]:
+                if res.get("brands"):
                     st.bar_chart(pd.DataFrame(list(res["brands"].items()), columns=["Brand", "Count"]).set_index("Brand"))
             with col_c:
                 st.markdown("#### Share of Shelf Space (%)")
-                if res["shelf_space_percent"]:
+                if res.get("shelf_space_percent"):
                     st.bar_chart(pd.DataFrame(list(res["shelf_space_percent"].items()), columns=["Brand", "Share (%)"]).set_index("Brand"))
 
         with tab3:
