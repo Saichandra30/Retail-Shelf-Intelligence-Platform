@@ -20,7 +20,7 @@ source venv/bin/activate
 ```
 
 ### 2. Install Dependencies
-Install all required libraries, including PyTorch, Ultralytics (YOLO), HuggingFace Transformers, and docTR.
+Install all required libraries, including PyTorch, Ultralytics (YOLO), HuggingFace Transformers, and EasyOCR.
 
 ```bash
 pip install -r requirements.txt
@@ -61,7 +61,7 @@ graph TD
     F -->|SigLIP Zero-Shot| G[Brand Labels & Confidences]
     
     G --> H[Shelf OCR]
-    H -->|docTR Slit-RoI| I[Extracted Price Tags]
+    H -->|EasyOCR Slit-RoI| I[Extracted Price Tags]
     
     I --> J[Data Aggregation]
     G --> J
